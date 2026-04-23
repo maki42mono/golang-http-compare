@@ -1,3 +1,3 @@
-module http-compare
+module speedtest
 
 go 1.26.1
