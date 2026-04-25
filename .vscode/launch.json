@@ -13,6 +13,7 @@
             "program": "${fileDirname}/..",
             "args": [
                 "-case", "sync",
+                "-timeout", "1200ms",
             ]
         }
     ]

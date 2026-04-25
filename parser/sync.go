@@ -7,14 +7,13 @@ import (
 )
 
 func SyncCall(ctx context.Context) (any, error) {
-	for i := 1; i <= 3; i++ {
+	for i := 1; i <= 8; i++ {
 		select {
 		case <-ctx.Done():
-			fmt.Println("Context was canselled before I finished. So I finish with an error =))0")
+			fmt.Println("Context was cancelled before I finished. So I finish with an error =))0")
 			return nil, ctx.Err()
-		case <-time.After(300 * time.Millisecond):
+		case <-time.After(1000 * time.Millisecond):
 			fmt.Printf("step %d finished\n", i)
-			i++
 		}
 	}
 
