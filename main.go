@@ -11,8 +11,8 @@ import (
 )
 
 var registry = map[string]parser.TestCase{
-	"timer": parser.TimerTest,
-	"sync":  parser.SyncCase,
+	// "timer": parser.TimerTest,
+	"sync": parser.SyncCase,
 }
 
 func main() {
@@ -52,5 +52,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("case finished: %v\n", result)
+	fmt.Printf("case finished: \n%v\n", func(r map[string]*parser.ParsedLink) string {
+		var res string
+		for _, v := range r {
+			res = res + fmt.Sprintf(",\n%v", v)
+		}
+
+		return res
+	}(result))
 }

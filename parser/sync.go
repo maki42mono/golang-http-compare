@@ -2,6 +2,7 @@ package parser
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -16,6 +17,11 @@ type ParsedLink struct {
 	Deep  int
 	Count int
 	OK    bool
+}
+
+func (p *ParsedLink) String() string {
+	data, _ := json.MarshalIndent(p, "", "")
+	return string(data)
 }
 
 var res map[string]*ParsedLink
@@ -58,7 +64,7 @@ func isPageURL(u string) bool {
 
 // https://chatgpt.com/g/g-p-678c0ac3548081918045c2cc6840396d/c/69d7dfcd-0eb0-838c-929b-f5cea6084d17
 
-func SyncCase(ctx context.Context, links []string, dep int) (any, error) {
+func SyncCase(ctx context.Context, links []string, dep int) (map[string]*ParsedLink, error) {
 	if dep == 0 {
 		return nil, nil
 	}
@@ -68,12 +74,12 @@ func SyncCase(ctx context.Context, links []string, dep int) (any, error) {
 		var linkCopy *ParsedLink
 		if ok && parsedLink.Count > 0 {
 			parsedLink.Count++
-			// fmt.Printf("%v was already met %v timed. Continue\n", links[i], res[links[i]])
 			continue
 		}
 		if !ok {
 			parsedLink := ParsedLink{}
 			parsedLink.Link = links[i]
+			parsedLink.Deep = dep
 			res[links[i]] = &parsedLink
 			linkCopy = &parsedLink
 		} else {
