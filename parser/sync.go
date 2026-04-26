@@ -3,41 +3,83 @@ package parser
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
-	"regexp"
+	"net/url"
+	"path/filepath"
+	"strings"
+
+	goquery "github.com/PuerkitoBio/goquery"
 )
 
-type noResultErr struct{}
-
-func (e *noResultErr) Error() string {
-	return "No url were paesed"
+type ParsedLink struct {
+	Link  string
+	Deep  int
+	Count int
+	OK    bool
 }
 
-var res map[string]int
-var curDep int
+var res map[string]*ParsedLink
 
 func init() {
-	res = make(map[string]int)
-	curDep = 0
+	res = make(map[string]*ParsedLink)
+}
+
+func isPageURL(u string) bool {
+	parsed, err := url.Parse(u)
+	if err != nil {
+		return false
+	}
+
+	path := parsed.Path
+
+	// no extension → likely page
+	if !strings.Contains(path, ".") {
+		return true
+	}
+
+	ext := strings.ToLower(filepath.Ext(path))
+
+	bad := map[string]bool{
+		".jpg":  true,
+		".jpeg": true,
+		".png":  true,
+		".gif":  true,
+		".svg":  true,
+		".pdf":  true,
+		".zip":  true,
+		".mp4":  true,
+		".mp3":  true,
+		".css":  true,
+		".js":   true,
+	}
+
+	return !bad[ext]
 }
 
 // https://chatgpt.com/g/g-p-678c0ac3548081918045c2cc6840396d/c/69d7dfcd-0eb0-838c-929b-f5cea6084d17
 
 func SyncCase(ctx context.Context, links []string, dep int) (any, error) {
-	if curDep == dep {
-		curDep--
+	if dep == 0 {
 		return nil, nil
 	}
 
-	re := regexp.MustCompile(`https?://[^\s"'<>]+`)
-
 	for i := range links {
-		if res[links[i]] > 0 {
-			res[links[i]]++
-			fmt.Printf("%v was already met %v timed. Continue\n", links[i], res[links[i]])
+		parsedLink, ok := res[links[i]]
+		var linkCopy *ParsedLink
+		if ok && parsedLink.Count > 0 {
+			parsedLink.Count++
+			// fmt.Printf("%v was already met %v timed. Continue\n", links[i], res[links[i]])
 			continue
 		}
+		if !ok {
+			parsedLink := ParsedLink{}
+			parsedLink.Link = links[i]
+			res[links[i]] = &parsedLink
+			linkCopy = &parsedLink
+		} else {
+			linkCopy = parsedLink
+		}
+		linkCopy.Count++
 
 		resp, err := http.Get(links[i])
 		if err != nil {
@@ -47,19 +89,45 @@ func SyncCase(ctx context.Context, links []string, dep int) (any, error) {
 		defer resp.Body.Close()
 
 		if resp.StatusCode != 200 {
-			fmt.Printf("Couldn't parse with resp error: %v: %v. Continue\n", resp.StatusCode, links[i])
+			linkCopy.OK = false
+			fmt.Printf("Couldn't parse with resp error: %v: %v. Contingitue\n", resp.StatusCode, links[i])
 			continue
 		}
 
-		html, err := io.ReadAll(resp.Body)
+		doc, err := goquery.NewDocumentFromReader(resp.Body)
 		if err != nil {
+			linkCopy.OK = false
 			fmt.Printf("Couldn't parse with get error %v. Continue\n", links[i])
 			continue
 		}
+		linkCopy.OK = true
 
-		curDep++
-		newLinks := re.FindAllString(string(html), -1)
-		SyncCase(ctx, newLinks, dep)
+		var newLinks []string
+		doc.Find("a").Each(func(i int, s *goquery.Selection) {
+			val, ok := s.Attr("href")
+			if !ok {
+				return
+			}
+			newLinks = append(newLinks, val)
+		})
+
+		fmt.Printf("Parsing %v\n", links[i])
+		for j := range newLinks {
+			if !isPageURL(newLinks[j]) {
+				continue
+			}
+			newLink := make([]string, 1)
+			newLink[0] = newLinks[j]
+			if strings.HasPrefix(newLink[0], "mailto:") {
+				continue
+			}
+			if !strings.HasPrefix(newLink[0], "http") {
+				newLink[0] = links[i] + newLink[0]
+			}
+
+			SyncCase(ctx, newLink, dep-1)
+		}
+
 	}
 
 	return res, nil
