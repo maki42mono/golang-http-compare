@@ -27,12 +27,6 @@ func measure(w *csv.Writer) func() {
 }
 
 func main() {
-	file, err := os.Create("dump/res.csv")
-	if err != nil {
-		panic(err)
-	}
-	defer file.Close()
-
 	caseName := flag.String("case", "timer", "Test case name")
 	timeout := flag.Duration("timeout", 0, "give just a timeout in ms")
 	flag.Parse()
@@ -45,6 +39,11 @@ func main() {
 	}
 
 	fmt.Printf("i have such a case: %v\n", *caseName)
+	file, err := os.Create(fmt.Sprintf("dump/res_%v.csv", *caseName))
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
 
 	ctx := context.Background()
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
@@ -93,6 +92,6 @@ func main() {
 	for _, v := range sorted {
 		writer.Write(v.GetRow())
 	}
+	writer.Write([]string{fmt.Sprintf("Links parsed: %v", len(sorted))})
 	fmt.Println("Done!")
-
 }
