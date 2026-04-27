@@ -7,3 +7,7 @@ type TestCase func(ctx context.Context, links []string, dep int) (map[string]*Pa
 type Printable interface {
 	String() string
 }
+
+type CsvRow interface {
+	GetRow() []string
+}

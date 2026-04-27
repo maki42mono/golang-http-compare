@@ -3,10 +3,10 @@ package parser
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	goquery "github.com/PuerkitoBio/goquery"
@@ -22,6 +22,16 @@ type ParsedLink struct {
 func (p *ParsedLink) String() string {
 	data, _ := json.MarshalIndent(p, "", "")
 	return string(data)
+}
+
+func (p *ParsedLink) GetRow() []string {
+	// res := make([]string, 4)
+	return []string{p.Link, strconv.Itoa(p.Deep), strconv.Itoa(p.Count), func(v bool) string {
+		if v {
+			return "ok"
+		}
+		return "err"
+	}(p.OK)}
 }
 
 var res map[string]*ParsedLink
@@ -89,21 +99,21 @@ func SyncCase(ctx context.Context, links []string, dep int) (map[string]*ParsedL
 
 		resp, err := http.Get(links[i])
 		if err != nil {
-			fmt.Printf("Couldn't parse with get error %v. Continue\n", links[i])
+			// fmt.Printf("Couldn't parse with get error %v. Continue\n", links[i])
 			continue
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode != 200 {
 			linkCopy.OK = false
-			fmt.Printf("Couldn't parse with resp error: %v: %v. Contingitue\n", resp.StatusCode, links[i])
+			// fmt.Printf("Couldn't parse with resp error: %v: %v. Contingitue\n", resp.StatusCode, links[i])
 			continue
 		}
 
 		doc, err := goquery.NewDocumentFromReader(resp.Body)
 		if err != nil {
 			linkCopy.OK = false
-			fmt.Printf("Couldn't parse with get error %v. Continue\n", links[i])
+			// fmt.Printf("Couldn't parse with get error %v. Continue\n", links[i])
 			continue
 		}
 		linkCopy.OK = true
@@ -117,7 +127,7 @@ func SyncCase(ctx context.Context, links []string, dep int) (map[string]*ParsedL
 			newLinks = append(newLinks, val)
 		})
 
-		fmt.Printf("Parsing %v\n", links[i])
+		// fmt.Printf("Parsing %v\n", links[i])
 		for j := range newLinks {
 			if !isPageURL(newLinks[j]) {
 				continue

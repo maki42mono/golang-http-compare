@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	"encoding/csv"
 	"flag"
 	"fmt"
 	"os"
 	"os/signal"
+	"sort"
 	"speedtest/parser"
 	"syscall"
+	"time"
 )
 
 var registry = map[string]parser.TestCase{
@@ -15,7 +18,21 @@ var registry = map[string]parser.TestCase{
 	"sync": parser.SyncCase,
 }
 
+func measure(w *csv.Writer) func() {
+	start := time.Now()
+
+	return func() {
+		w.Write([]string{fmt.Sprintf("Time needed: %v", time.Since(start))})
+	}
+}
+
 func main() {
+	file, err := os.Create("dump/res.csv")
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
 	caseName := flag.String("case", "timer", "Test case name")
 	timeout := flag.Duration("timeout", 0, "give just a timeout in ms")
 	flag.Parse()
@@ -40,8 +57,10 @@ func main() {
 	}
 
 	var links []string
-	links = append(links, "https://serebii.net")
-
+	links = append(links, "https://lnb.lt")
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+	defer measure(writer)()
 	result, error := runCase(ctx, links, 2)
 	if error == context.Canceled {
 		fmt.Printf("Oppsi poopsi. Why did you terminate?))\n")
@@ -52,12 +71,28 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("case finished: \n%v\n", func(r map[string]*parser.ParsedLink) string {
-		var res string
-		for _, v := range r {
-			res = res + fmt.Sprintf(",\n%v", v)
+	sorted := make([]*parser.ParsedLink, 0, len(result))
+	for _, v := range result {
+		sorted = append(sorted, v)
+	}
+	sort.Slice(sorted, func(i int, j int) bool {
+		if sorted[i].Deep != sorted[j].Deep {
+			return sorted[i].Deep > sorted[j].Deep
 		}
+		if sorted[i].Count != sorted[j].Count {
+			return sorted[i].Count > sorted[j].Count
+		}
+		if sorted[i].OK != sorted[j].OK {
+			return sorted[i].OK
+		}
+		return sorted[i].Link > sorted[j].Link
+	})
 
-		return res
-	}(result))
+	writer.Write([]string{"Link", "Depth", "Count", "Success"})
+	fmt.Println("Started writing...")
+	for _, v := range sorted {
+		writer.Write(v.GetRow())
+	}
+	fmt.Println("Done!")
+
 }
