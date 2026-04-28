@@ -40,14 +40,15 @@ func craw(ctx context.Context, links []string, dep int, wg *sync.WaitGroup, mu *
 			linkCopy = parsedLink
 		}
 		linkCopy.Count++
+		mu.Unlock()
 
 		resp, err := http.Get(links[i])
 		if err != nil {
-			mu.Unlock()
 			continue
 		}
 		defer resp.Body.Close()
 
+		mu.Lock()
 		if resp.StatusCode != 200 {
 			linkCopy.OK = false
 			mu.Unlock()
