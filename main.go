@@ -14,8 +14,8 @@ import (
 )
 
 var registry = map[string]parser.TestCase{
-	// "timer": parser.TimerTest,
-	"sync": parser.SyncCase,
+	"sync":  parser.SyncCase,
+	"async": parser.AsyncCase,
 }
 
 func measure(w *csv.Writer) func() {

@@ -12,7 +12,7 @@
             "mode": "auto",
             "program": "${fileDirname}/..",
             "args": [
-                "-case", "sync",
+                "-case", "async",
                 "-timeout", "1200ms",
             ]
         }

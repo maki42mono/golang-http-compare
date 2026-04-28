@@ -4,35 +4,37 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"sync"
 
 	goquery "github.com/PuerkitoBio/goquery"
 )
 
-var res map[string]*ParsedLink
+var async_res map[string]*ParsedLink
 
 func init() {
-	res = make(map[string]*ParsedLink)
+	async_res = make(map[string]*ParsedLink)
 }
 
-// https://chatgpt.com/g/g-p-678c0ac3548081918045c2cc6840396d/c/69d7dfcd-0eb0-838c-929b-f5cea6084d17
-
-func SyncCase(ctx context.Context, links []string, dep int) (map[string]*ParsedLink, error) {
+func craw(ctx context.Context, links []string, dep int, wg *sync.WaitGroup, mu *sync.Mutex) {
+	defer wg.Done()
 	if dep == 0 {
-		return nil, nil
+		return
 	}
 
 	for i := range links {
-		parsedLink, ok := res[links[i]]
+		mu.Lock()
+		parsedLink, ok := async_res[links[i]]
 		var linkCopy *ParsedLink
 		if ok && parsedLink.Count > 0 {
 			parsedLink.Count++
+			mu.Unlock()
 			continue
 		}
 		if !ok {
 			parsedLink := ParsedLink{}
 			parsedLink.Link = links[i]
 			parsedLink.Deep = dep
-			res[links[i]] = &parsedLink
+			async_res[links[i]] = &parsedLink
 			linkCopy = &parsedLink
 		} else {
 			linkCopy = parsedLink
@@ -41,24 +43,25 @@ func SyncCase(ctx context.Context, links []string, dep int) (map[string]*ParsedL
 
 		resp, err := http.Get(links[i])
 		if err != nil {
-			// fmt.Printf("Couldn't parse with get error %v. Continue\n", links[i])
+			mu.Unlock()
 			continue
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode != 200 {
 			linkCopy.OK = false
-			// fmt.Printf("Couldn't parse with resp error: %v: %v. Contingitue\n", resp.StatusCode, links[i])
+			mu.Unlock()
 			continue
 		}
 
 		doc, err := goquery.NewDocumentFromReader(resp.Body)
 		if err != nil {
 			linkCopy.OK = false
-			// fmt.Printf("Couldn't parse with get error %v. Continue\n", links[i])
+			mu.Unlock()
 			continue
 		}
 		linkCopy.OK = true
+		mu.Unlock()
 
 		var newLinks []string
 		doc.Find("a").Each(func(i int, s *goquery.Selection) {
@@ -82,11 +85,19 @@ func SyncCase(ctx context.Context, links []string, dep int) (map[string]*ParsedL
 			if !strings.HasPrefix(newLink[0], "http") {
 				newLink[0] = links[i] + newLink[0]
 			}
-
-			SyncCase(ctx, newLink, dep-1)
+			wg.Add(1)
+			go craw(ctx, newLink, dep-1, wg, mu)
 		}
-
 	}
+}
 
-	return res, nil
+func AsyncCase(ctx context.Context, links []string, dep int) (map[string]*ParsedLink, error) {
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	craw(ctx, links, dep, &wg, &mu)
+	wg.Wait()
+
+	return async_res, nil
 }
